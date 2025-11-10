@@ -1,4 +1,11 @@
 {
     "appid": "12345",
-    "secret": "xxxx"
+    "secret": "xxxx",
+    "commands": {
+        "/hello": {
+            "execute": [],
+            "response": "hello world",
+            "shell": true
+        }
+    }
 }

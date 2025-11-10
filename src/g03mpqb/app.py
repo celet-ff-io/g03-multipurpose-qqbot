@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""Main application."""
+
 import argparse
 from io import TextIOWrapper
 import json
@@ -20,7 +22,9 @@ import sys
 from typing import Any
 
 import botpy
-from botpy.message import Message
+from botpy.message import DirectMessage
+
+from g03mpqb.command import Command, Commander
 
 if __name__ == "__main__":
     import os.path
@@ -34,19 +38,34 @@ logger = logging.getLogger(__name__)
 class BotClient(botpy.Client):
     """Bot client."""
 
-    async def on_at_message_create(self, message: Message):
-        """Handle @ mention messages."""
-        robot = self._require_robot()
-        content = message.content
-        logger.info(f"Received @ mention message: {content}")
-        await message.reply(content=f"{robot.name} received message: {content}")
+    class OnMessageListener:
+        """Message listener."""
 
-    def _require_robot(self) -> botpy.Robot:
-        """Require the robot associated with this client."""
-        robot = self.robot
-        if robot is None:
-            raise RuntimeError("Robot is not initialized")
-        return robot
+        __slots__ = ()
+
+        def on_direct_message_create(self, message: DirectMessage) -> str:
+            """Handle direct messages."""
+            return ""
+
+    __on_message_listener: OnMessageListener | None
+
+    @property
+    def on_message_listener(self) -> OnMessageListener:
+        """Get the on-message listener associated with this client."""
+        if self.__on_message_listener is None:
+            raise RuntimeError("Client's on-message listener is not initialized")
+        return self.__on_message_listener
+
+    @on_message_listener.setter
+    def on_message_listener(self, on_message_listener: OnMessageListener) -> None:
+        """Set the on-message listener associated with this client."""
+        self.__on_message_listener = on_message_listener
+
+    async def on_direct_message_create(self, message: DirectMessage) -> None:
+        """Handle direct messages."""
+        logger.info(f"Received direct message from {message.author}: {message.content}")
+        reply_content = self.on_message_listener.on_direct_message_create(message)
+        await message.reply(content=reply_content)
 
 
 class ConfigError(KeyError):
@@ -78,19 +97,30 @@ class App:
         @property
         def appid(self) -> str:
             """Bot app ID."""
-            return self._require_config_entry()
+            return self._config_entry()
 
         @property
         def secret(self) -> str:
             """Bot app secret."""
-            return self._require_config_entry()
+            return self._config_entry()
 
-        def _require_config_entry(self, key: str | None = None) -> Any:
+        @property
+        def commands(self) -> dict[str, Command]:
+            """Commands."""
+            return self._config_entry(required=False, default={})
+
+        def _config_entry(
+            self,
+            key: str | None = None,
+            *,
+            required: bool = True,
+            default: Any = None,
+        ) -> Any:
             """Require a config entry by key.
 
             If `key` is omitted, attempt to infer the key from the caller's
             function name (useful for simple property wrappers like
-            `def appid(self): return self._require_config_entry()`). If
+            `def appid(self): return self._config_entry()`). If
             inference fails, raise a ValueError to require the caller to pass
             the key explicitly.
             """
@@ -112,7 +142,12 @@ class App:
                     # Break reference cycles created by frame objects
                     del frame
 
-            return App.Config.require_config_entry(self._conf_dict, key)
+            conf_dict = self._conf_dict
+            return (
+                App.Config.require_config_entry(conf_dict, key)
+                if required
+                else conf_dict.get(key, default)
+            )
 
         @classmethod
         def load_json(cls, fp: TextIOWrapper) -> "App.Config":
@@ -129,6 +164,7 @@ class App:
                 raise ConfigError(key)
 
     _config: Config
+    _commander: Commander
 
     def __init__(self, config_path: str) -> None:
         """Initialize and run the application."""
@@ -146,10 +182,38 @@ class App:
             raise err
         print("Config loaded.")
 
+        self._commander = commander = Commander(config.commands)
+
         print("Start client.")
         print("------------------------")
-        intents = botpy.Intents(guild_messages=True)
+        intents = botpy.Intents.all()
         client = BotClient(intents=intents)
+
+        class AppOnMessageListener(BotClient.OnMessageListener):
+            """Message listener."""
+
+            def on_direct_message_create(self, message: DirectMessage) -> str:
+                """Handle direct messages."""
+                cmd_name = message.content.strip()
+                resp = commander.run_command_noblock(cmd_name)
+                if resp is None:
+                    reply_content = f"Failed to execute command."
+                    logger.info(
+                        "Failed command from %s: %s", message.author, cmd_name
+                    )
+                else:
+                    reply_content = (
+                        resp if resp else "Executed command successfully."
+                    )
+                    logger.info(
+                        "Executed command from %s: %s -> %s",
+                        message.author,
+                        cmd_name,
+                        reply_content,
+                    )
+                return reply_content
+
+        client.on_message_listener = AppOnMessageListener()
         client.run(appid=config.appid, secret=config.secret)
 
 

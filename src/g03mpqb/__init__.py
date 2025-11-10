@@ -12,25 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-[project]
-name = "g03-multipurpose-qqbot"
-version = "0.2.0"
-description = ""
-readme = "README.md"
-requires-python = ">=3.13"
-dependencies = [
-    "qq-botpy>=1.2.1",
-]
+from g03mpqb import app
 
-authors = [{ name = "celet-ff-io" }]
-license = "Apache-2.0"
-
-[tool.setuptools.package-dir]
-"" = "src"
-
-[tool.setuptools.packages.find]
-where = ["src"]
-include = ["g03mpqb*"]
-
-[tool.poetry]
-packages = [{ include = "g03mpqb", from = "src" }]
+__all__ = ["app"]

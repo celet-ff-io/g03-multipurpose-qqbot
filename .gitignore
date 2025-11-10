@@ -11,3 +11,6 @@ uv.lock
 
 # Virtual environments
 .venv
+
+# Common store folder for secrets
+secrets/

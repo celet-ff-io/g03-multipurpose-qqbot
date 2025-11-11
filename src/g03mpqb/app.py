@@ -197,9 +197,9 @@ class App:
                 cmd_name = message.content.strip()
                 resp = commander.run_command_noblock(cmd_name)
                 if resp is None:
-                    reply_content = f"Failed to execute command."
+                    reply_content = f"No such command: {cmd_name}"
                     logger.info(
-                        "Failed command from %s: %s", message.author, cmd_name
+                        "No such command from %s: %s", message.author, cmd_name
                     )
                 else:
                     reply_content = (

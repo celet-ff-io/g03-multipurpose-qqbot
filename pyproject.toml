@@ -14,7 +14,7 @@
 
 [project]
 name = "g03-multipurpose-qqbot"
-version = "1.0.0"
+version = "1.0.1"
 description = ""
 readme = "README.md"
 requires-python = ">=3.13"
